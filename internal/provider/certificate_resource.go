@@ -17,19 +17,19 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &createResource{}
-	_ resource.ResourceWithConfigure = &createResource{}
+	_ resource.Resource              = &certificateResource{}
+	_ resource.ResourceWithConfigure = &certificateResource{}
 )
 
-func NewCreateResource() resource.Resource {
-	return &createResource{}
+func NewCertificateResource() resource.Resource {
+	return &certificateResource{}
 }
 
-type createResource struct {
+type certificateResource struct {
 	azureCred *azcore.TokenCredential
 }
 
-type createKey struct {
+type certificateKey struct {
 	Curve      types.String `tfsdk:"curve"`
 	Exportable types.Bool   `tfsdk:"exportable"`
 	KeySize    types.Int64  `tfsdk:"key_size"`
@@ -37,21 +37,21 @@ type createKey struct {
 	ReuseKey   types.Bool   `tfsdk:"reuse_key"`
 }
 
-type createResourceModel struct {
-	CSRPEM   types.String `tfsdk:"csr_pem"`
-	Key      createKey    `tfsdk:"key"`
-	Name     types.String `tfsdk:"name"`
-	Trigger  types.String `tfsdk:"trigger"`
-	VaultURL types.String `tfsdk:"vault_url"`
+type certificateResourceModel struct {
+	CSRPEM   types.String   `tfsdk:"csr_pem"`
+	Key      certificateKey `tfsdk:"key"`
+	Name     types.String   `tfsdk:"name"`
+	Trigger  types.String   `tfsdk:"trigger"`
+	VaultURL types.String   `tfsdk:"vault_url"`
 }
 
 // Metadata returns the resource type name.
-func (r *createResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_create"
+func (r *certificateResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_certificate"
 }
 
 // Schema defines the schema for the resource.
-func (r *createResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *certificateResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Create a new certificate version and if needed cert ready for signing",
 		Attributes: map[string]schema.Attribute{
@@ -114,9 +114,9 @@ func (r *createResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 }
 
 // Create creates the resource and sets the initial Terraform state.
-func (r *createResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r *certificateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Retrieve values from plan
-	var plan createResourceModel
+	var plan certificateResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -180,17 +180,17 @@ func (r *createResource) Create(ctx context.Context, req resource.CreateRequest,
 }
 
 // Read refreshes the Terraform state with the latest data.
-func (r *createResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (r *certificateResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 }
 
 // Update updates the resource and sets the updated Terraform state on success.
-func (r *createResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *certificateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
-func (r *createResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *certificateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	// Retrieve values from state
-	var state createResourceModel
+	var state certificateResourceModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -220,7 +220,7 @@ func (r *createResource) Delete(ctx context.Context, req resource.DeleteRequest,
 }
 
 // Configure adds the provider configured client to the resource.
-func (r *createResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *certificateResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Add a nil check when handling ProviderData because Terraform
 	// sets that data after it calls the ConfigureProvider RPC.
 	if req.ProviderData == nil {

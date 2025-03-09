@@ -1,26 +1,5 @@
-# Terraform Provider for using Azure Key Vault as a CA
-
-Traditionally using Azure Key Vault(KV) as a CA requires exporting the CA private key into terraform where it gets saved into state.
-
-KV has support for a sign operation on stored keys regardless of their exportability. With a little work this sign operation can be used to generate certificates.
-
-This provider encapsulates that functionality
-
-# Example Usage
-
-```hcl
-terraform {
-  required_providers {
-    azurekvca = {
-      source = "OpenAxon/azurekvca"
-    }
-  }
-}
-
-provider "azurekvca" {}
-
 resource "azurekvca_certificate" "example" {
-  vault_url = "https://something.vault.azure.net/"
+  vault_url = azurerm_key_vault.example.vault_uri
   name      = "test-cert"
 
   key = {
@@ -66,9 +45,4 @@ resource "azurekvca_merged_certificate" "example" {
   name      = azurekvca_certificate.example.name
   cert_pem  = azurekvca_signed_certificate.example.signed_cert_pem
 }
-```
 
-# TODO
-* Create and Merge resources don't attempt to sync their state with the Azure
-* Create doesn't support self-signed or CA certs for creating the CA itself
-* Only support for PEM certs so far, no pkcs12

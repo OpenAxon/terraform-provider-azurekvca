@@ -13,44 +13,46 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
+	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &signResource{}
-	_ resource.ResourceWithConfigure = &signResource{}
+	_ resource.Resource              = &signedCertificateResource{}
+	_ resource.ResourceWithConfigure = &signedCertificateResource{}
 )
 
-func NewSignResource() resource.Resource {
-	return &signResource{}
+func NewSignedCertificateResource() resource.Resource {
+	return &signedCertificateResource{}
 }
 
-type signResource struct {
+type signedCertificateResource struct {
 	azureCred *azcore.TokenCredential
 }
 
-type signResourceModel struct {
-	CAName             types.String `tfsdk:"ca_name"`
-	CSRPEM             types.String `tfsdk:"csr_pem"`
-	SignatureAlgorithm types.String `tfsdk:"signature_algorithm"`
-	SignedCertPEM      types.String `tfsdk:"signed_cert_pem"`
-	ValidityDays       types.Int64  `tfsdk:"validity_days"`
-	VaultURL           types.String `tfsdk:"vault_url"`
+type signedCertificateResourceModel struct {
+	CAName             types.String              `tfsdk:"ca_name"`
+	CSRPEM             types.String              `tfsdk:"csr_pem"`
+	SignatureAlgorithm azkeys.SignatureAlgorithm `tfsdk:"signature_algorithm"`
+	SignedCertPEM      types.String              `tfsdk:"signed_cert_pem"`
+	ValidityDays       types.Int64               `tfsdk:"validity_days"`
+	VaultURL           types.String              `tfsdk:"vault_url"`
 }
 
 // Metadata returns the resource type name.
-func (r *signResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_sign"
+func (r *signedCertificateResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_signed_certificate"
 }
 
 // Schema defines the schema for the resource.
-func (r *signResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *signedCertificateResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Sign a CSR using a CA certificate in Key Vault. This can be done with CAs with non exportable keys",
 		Attributes: map[string]schema.Attribute{
@@ -102,9 +104,9 @@ func (r *signResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 }
 
 // Create creates the resource and sets the initial Terraform state.
-func (r *signResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r *signedCertificateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Retrieve values from plan
-	var plan signResourceModel
+	var plan signedCertificateResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -127,6 +129,10 @@ func (r *signResource) Create(ctx context.Context, req resource.CreateRequest, r
 			"Could not decode CSR, unexpected error: "+err.Error(),
 		)
 		return
+	}
+
+	for i := 0; i < len(csr.Extensions); i++ {
+		tflog.Debug(ctx, csr.Extensions[i].Id.String())
 	}
 
 	sanIdx := slices.IndexFunc(csr.Extensions, func(e pkix.Extension) bool { return e.Id.Equal(oidExtensionSubjectAltName) })
@@ -182,7 +188,7 @@ func (r *signResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	signer, err := NewAzureKVSigner(ctx, *r.azureCred, plan.VaultURL.ValueString(), plan.CAName.ValueString(), plan.SignatureAlgorithm.ValueString(), parsedCACert.PublicKey)
+	signer, err := NewAzureKVSigner(ctx, *r.azureCred, plan.VaultURL.ValueString(), plan.CAName.ValueString(), plan.SignatureAlgorithm, parsedCACert.PublicKey)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating signer",
@@ -216,25 +222,24 @@ func (r *signResource) Create(ctx context.Context, req resource.CreateRequest, r
 }
 
 // Read refreshes the Terraform state with the latest data.
-func (r *signResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (r *signedCertificateResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 }
 
 // Update updates the resource and sets the updated Terraform state on success.
-func (r *signResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *signedCertificateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
-func (r *signResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *signedCertificateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 }
 
 // Configure adds the provider configured client to the resource.
-func (r *signResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *signedCertificateResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Add a nil check when handling ProviderData because Terraform
 	// sets that data after it calls the ConfigureProvider RPC.
 	if req.ProviderData == nil {
 		return
 	}
-
 	azureCred, ok := req.ProviderData.(azcore.TokenCredential)
 
 	if !ok {

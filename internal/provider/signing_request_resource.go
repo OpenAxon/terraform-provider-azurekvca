@@ -20,38 +20,38 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &requestResource{}
-	_ resource.ResourceWithConfigure = &requestResource{}
+	_ resource.Resource              = &signingRequestResource{}
+	_ resource.ResourceWithConfigure = &signingRequestResource{}
 )
 
-func NewRequestResource() resource.Resource {
-	return &requestResource{}
+func NewSigningRequestResource() resource.Resource {
+	return &signingRequestResource{}
 }
 
-type requestResource struct {
+type signingRequestResource struct {
 	azureCred *azcore.TokenCredential
 }
 
-type requestNames struct {
+type signingRequestNames struct {
 	DNS   []types.String `tfsdk:"dns"`
 	Email []types.String `tfsdk:"email"`
 	IP    []types.String `tfsdk:"ip"`
 	URI   []types.String `tfsdk:"uri"`
 }
 
-type requestResourceModel struct {
-	CSRPEMIn  types.String `tfsdk:"csr_pem_in"`
-	CSRPEMOut types.String `tfsdk:"csr_pem_out"`
-	Names     requestNames `tfsdk:"names"`
+type signingRequestResourceModel struct {
+	CSRPEMIn  types.String        `tfsdk:"csr_pem_in"`
+	CSRPEMOut types.String        `tfsdk:"csr_pem_out"`
+	Names     signingRequestNames `tfsdk:"names"`
 }
 
 // Metadata returns the resource type name.
-func (r *requestResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_request"
+func (r *signingRequestResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_signing_request"
 }
 
 // Schema defines the schema for the resource.
-func (r *requestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *signingRequestResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Mangle a CSR to add fields that aren't supported by Azure (URI SANs)",
 		Attributes: map[string]schema.Attribute{
@@ -100,9 +100,9 @@ func (r *requestResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 }
 
 // Create creates the resource and sets the initial Terraform state.
-func (r *requestResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r *signingRequestResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Retrieve values from plan
-	var plan requestResourceModel
+	var plan signingRequestResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -206,19 +206,19 @@ func (r *requestResource) Create(ctx context.Context, req resource.CreateRequest
 }
 
 // Read refreshes the Terraform state with the latest data.
-func (r *requestResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (r *signingRequestResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 }
 
 // Update updates the resource and sets the updated Terraform state on success.
-func (r *requestResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *signingRequestResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
-func (r *requestResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *signingRequestResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 }
 
 // Configure adds the provider configured client to the resource.
-func (r *requestResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *signingRequestResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Add a nil check when handling ProviderData because Terraform
 	// sets that data after it calls the ConfigureProvider RPC.
 	if req.ProviderData == nil {

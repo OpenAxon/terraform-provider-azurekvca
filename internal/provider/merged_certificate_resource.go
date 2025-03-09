@@ -17,31 +17,31 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &mergeResource{}
-	_ resource.ResourceWithConfigure = &mergeResource{}
+	_ resource.Resource              = &mergedCertificateResource{}
+	_ resource.ResourceWithConfigure = &mergedCertificateResource{}
 )
 
-func NewMergeResource() resource.Resource {
-	return &mergeResource{}
+func NewMergedCertificateResource() resource.Resource {
+	return &mergedCertificateResource{}
 }
 
-type mergeResource struct {
+type mergedCertificateResource struct {
 	azureCred *azcore.TokenCredential
 }
 
-type mergeResourceModel struct {
+type mergedCertificateResourceModel struct {
 	CertPem  types.String `tfsdk:"cert_pem"`
 	Name     types.String `tfsdk:"name"`
 	VaultURL types.String `tfsdk:"vault_url"`
 }
 
 // Metadata returns the resource type name.
-func (r *mergeResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_merge"
+func (r *mergedCertificateResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_merged_certificate"
 }
 
 // Schema defines the schema for the resource.
-func (r *mergeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *mergedCertificateResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Complete a certificate operation by merging the signed certificate with pending version",
 		Attributes: map[string]schema.Attribute{
@@ -71,9 +71,9 @@ func (r *mergeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 }
 
 // Create creates the resource and sets the initial Terraform state.
-func (r *mergeResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r *mergedCertificateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Retrieve values from plan
-	var plan mergeResourceModel
+	var plan mergedCertificateResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -123,19 +123,19 @@ func (r *mergeResource) Create(ctx context.Context, req resource.CreateRequest, 
 }
 
 // Read refreshes the Terraform state with the latest data.
-func (r *mergeResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (r *mergedCertificateResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 }
 
 // Update updates the resource and sets the updated Terraform state on success.
-func (r *mergeResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *mergedCertificateResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
-func (r mergeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r mergedCertificateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 }
 
 // Configure adds the provider configured client to the resource.
-func (r *mergeResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *mergedCertificateResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Add a nil check when handling ProviderData because Terraform
 	// sets that data after it calls the ConfigureProvider RPC.
 	if req.ProviderData == nil {
