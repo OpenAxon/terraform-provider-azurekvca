@@ -6,23 +6,22 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
-	"encoding/pem"
 	"fmt"
 	"math/big"
 	"slices"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
@@ -35,11 +34,25 @@ func NewCertificateResource() resource.Resource {
 	return &certificateResource{}
 }
 
+type certificateResourceModel struct {
+	Name              types.String      `tfsdk:"name"`
+	CAName            types.String      `tfsdk:"ca_name"`
+	Trigger           types.String      `tfsdk:"trigger"`
+	VaultURL          types.String      `tfsdk:"vault_url"`
+	CertificatePolicy CertificatePolicy `tfsdk:"certificate_policy"`
+}
+
 type certificateResource struct {
 	azureCred *azcore.TokenCredential
 }
 
-type certificateKey struct {
+type CertificatePolicy struct {
+	CertificateKeyProperties  CertificateKeyProperties  `tfsdk:"key_properties"`
+	SecretProperties          SecretProperties          `tfsdk:"secret_properties"`
+	X509CertificateProperties X509CertificateProperties `tfsdk:"x509_certificate_properties"`
+}
+
+type CertificateKeyProperties struct {
 	Curve      types.String `tfsdk:"curve"`
 	Exportable types.Bool   `tfsdk:"exportable"`
 	KeySize    types.Int64  `tfsdk:"key_size"`
@@ -47,12 +60,22 @@ type certificateKey struct {
 	ReuseKey   types.Bool   `tfsdk:"reuse_key"`
 }
 
-type certificateResourceModel struct {
-	CSRPEM   types.String   `tfsdk:"csr_pem"`
-	Key      certificateKey `tfsdk:"key"`
-	Name     types.String   `tfsdk:"name"`
-	Trigger  types.String   `tfsdk:"trigger"`
-	VaultURL types.String   `tfsdk:"vault_url"`
+type SecretProperties struct {
+	ContentType types.String `tfsdk:"content_type"`
+}
+
+type X509CertificateProperties struct {
+	Subject                 types.String            `tfsdk:"subject"`
+	KeyUsage                []string                `tfsdk:"key_usage"`
+	ExtendedKeyUsage        []string                `tfsdk:"extended_key_usage"`
+	ValidityInMonths        types.Int64             `tfsdk:"validity_in_months"`
+	SubjectAlternativeNames SubjectAlternativeNames `tfsdk:"subject_alternative_names"`
+}
+
+type SubjectAlternativeNames struct {
+	DNSNames []string `tfsdk:"dns_names"`
+	Emails   []string `tfsdk:"emails"`
+	UPNs     []string `tfsdk:"upns"`
 }
 
 // Metadata returns the resource type name.
@@ -65,41 +88,15 @@ func (r *certificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Create a new certificate version and if needed cert ready for signing",
 		Attributes: map[string]schema.Attribute{
-			"csr_pem": schema.StringAttribute{
-				MarkdownDescription: "Resulting CSR in PEM format",
-				Computed:            true,
-			},
-			"key": schema.SingleNestedAttribute{
-				MarkdownDescription: "Private key attributes",
-				Required:            true,
-				Attributes: map[string]schema.Attribute{
-					"curve": schema.StringAttribute{
-						MarkdownDescription: "One of (P-256, P-384, P-521) Required if key type is EC or EC-HSM",
-						Optional:            true,
-					},
-					"exportable": schema.BoolAttribute{
-						MarkdownDescription: "Is key able to be exported. Not supported if -HSM key type is used",
-						Required:            true,
-					},
-					"key_size": schema.Int64Attribute{
-						MarkdownDescription: "Size of key in bits. Required if key type is RSA or RSA-HSM",
-						Optional:            true,
-					},
-					"key_type": schema.StringAttribute{
-						MarkdownDescription: "Type of key to create (RSA, RSA-HSM, EC, EC-HSM)",
-						Required:            true,
-					},
-					"reuse_key": schema.BoolAttribute{
-						MarkdownDescription: "Should private key be reused on subsequent versions",
-						Required:            true,
-					},
-				},
-				PlanModifiers: []planmodifier.Object{
-					objectplanmodifier.RequiresReplace(),
-				},
-			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "Name of cert to create",
+				MarkdownDescription: "Name of certificate to create",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"ca_name": schema.StringAttribute{
+				MarkdownDescription: "Name of CA to use for signing",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -113,18 +110,108 @@ func (r *certificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			"vault_url": schema.StringAttribute{
-				MarkdownDescription: "URL of Azure Key Vault",
+				MarkdownDescription: "URL of Azure Key Vault where the certificate will be created",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"certificate_policy": schema.SingleNestedAttribute{
+				MarkdownDescription: "Certificate policy",
+				Required:            true,
+				Attributes: map[string]schema.Attribute{
+					"key_properties": schema.SingleNestedAttribute{
+						MarkdownDescription: "Private key attributes",
+						Required:            true,
+						Attributes: map[string]schema.Attribute{
+							"curve": schema.StringAttribute{
+								MarkdownDescription: "One of (P-256, P-384, P-521). Required if key type is EC or EC-HSM",
+								Optional:            true,
+							},
+							"exportable": schema.BoolAttribute{
+								MarkdownDescription: "Is key able to be exported. Not supported if -HSM key type is used",
+								Required:            true,
+							},
+							"key_size": schema.Int64Attribute{
+								MarkdownDescription: "Size of key in bits. Required if key type is RSA or RSA-HSM",
+								Optional:            true,
+							},
+							"key_type": schema.StringAttribute{
+								MarkdownDescription: "Type of key to create (RSA, RSA-HSM, EC, EC-HSM)",
+								Required:            true,
+							},
+							"reuse_key": schema.BoolAttribute{
+								MarkdownDescription: "Should private key be reused on subsequent versions",
+								Required:            true,
+							},
+						},
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.RequiresReplace(),
+						},
+					},
+					"secret_properties": schema.SingleNestedAttribute{
+						MarkdownDescription: "Secret properties",
+						Optional:            true,
+						Attributes: map[string]schema.Attribute{
+							"content_type": schema.StringAttribute{
+								MarkdownDescription: "Content type of the secret",
+								Optional:            true,
+								Computed:            true,
+								Default:             stringdefault.StaticString("application/x-pem-file"),
+							},
+						},
+					},
+					"x509_certificate_properties": schema.SingleNestedAttribute{
+						MarkdownDescription: "X.509 certificate properties",
+						Required:            true,
+						Attributes: map[string]schema.Attribute{
+							"subject": schema.StringAttribute{
+								MarkdownDescription: "Subject name of the certificate",
+								Required:            true,
+							},
+							"key_usage": schema.ListAttribute{
+								MarkdownDescription: "Key usage of the certificate",
+								Required:            true,
+								ElementType:         types.StringType,
+							},
+							"extended_key_usage": schema.ListAttribute{
+								MarkdownDescription: "Extended key usage of the certificate",
+								Optional:            true,
+								ElementType:         types.StringType,
+							},
+							"validity_in_months": schema.Int64Attribute{
+								MarkdownDescription: "Validity period of the certificate in months",
+								Optional:            true,
+								Computed:            true,
+								Default:             int64default.StaticInt64(1),
+							},
+							"subject_alternative_names": schema.SingleNestedAttribute{
+								MarkdownDescription: "Subject alternative names for the certificate",
+								Optional:            true,
+								Attributes: map[string]schema.Attribute{
+									"dns_names": schema.ListAttribute{
+										MarkdownDescription: "DNS names for the certificate",
+										Optional:            true,
+										ElementType:         types.StringType,
+									},
+									"emails": schema.ListAttribute{
+										MarkdownDescription: "Email addresses for the certificate",
+										Optional:            true,
+										ElementType:         types.StringType,
+									},
+									"upns": schema.ListAttribute{
+										MarkdownDescription: "User Principal Names for the certificate",
+										Optional:            true,
+										ElementType:         types.StringType,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
-}
-
-func toKeyUsageType(value azcertificates.KeyUsageType) *azcertificates.KeyUsageType {
-	return &value
 }
 
 // Create creates the resource and sets the initial Terraform state.
@@ -140,24 +227,20 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 	certClient, err := azcertificates.NewClient(plan.VaultURL.ValueString(), *r.azureCred, nil)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error creating cert client",
-			"Could not create cert client, unexpected error: "+err.Error(),
+			"Error creating azcertificates client",
+			"Could not create azcertificates client, unexpected error: "+err.Error(),
 		)
 		return
 	}
 
-	keySize := int32(plan.Key.KeySize.ValueInt64())
+	keySize := int32(plan.CertificatePolicy.CertificateKeyProperties.KeySize.ValueInt64())
 	issuer := "Unknown"
-	contentType := "application/x-pem-file"
-	subject := "CN=locmai.dev"
+	contentType := string(plan.CertificatePolicy.SecretProperties.ContentType.ValueString())
+	subject := string(plan.CertificatePolicy.X509CertificateProperties.Subject.ValueString())
 
-	keyUsage := []*azcertificates.KeyUsageType{
-		toKeyUsageType(azcertificates.KeyUsageTypeKeyCertSign),
-		toKeyUsageType(azcertificates.KeyUsageTypeDigitalSignature),
-		toKeyUsageType(azcertificates.KeyUsageTypeKeyEncipherment),
-		toKeyUsageType(azcertificates.KeyUsageTypeDataEncipherment),
-		toKeyUsageType(azcertificates.KeyUsageTypeNonRepudiation),
-		toKeyUsageType(azcertificates.KeyUsageTypeKeyAgreement),
+	keyUsage := []*azcertificates.KeyUsageType{}
+	for _, usage := range plan.CertificatePolicy.X509CertificateProperties.KeyUsage {
+		keyUsage = append(keyUsage, toKeyUsageType(ParseKeyUsageType(usage)))
 	}
 
 	azureCertParams := azcertificates.CreateCertificateParameters{
@@ -166,11 +249,11 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 				Name: &issuer,
 			},
 			KeyProperties: &azcertificates.KeyProperties{
-				Curve:      (*azcertificates.CurveName)(plan.Key.Curve.ValueStringPointer()),
-				Exportable: plan.Key.Exportable.ValueBoolPointer(),
+				Curve:      (*azcertificates.CurveName)(plan.CertificatePolicy.CertificateKeyProperties.Curve.ValueStringPointer()),
+				Exportable: plan.CertificatePolicy.CertificateKeyProperties.Exportable.ValueBoolPointer(),
 				KeySize:    &keySize,
-				KeyType:    (*azcertificates.KeyType)(plan.Key.KeyType.ValueStringPointer()),
-				ReuseKey:   plan.Key.ReuseKey.ValueBoolPointer(),
+				KeyType:    (*azcertificates.KeyType)(plan.CertificatePolicy.CertificateKeyProperties.KeyType.ValueStringPointer()),
+				ReuseKey:   plan.CertificatePolicy.CertificateKeyProperties.ReuseKey.ValueBoolPointer(),
 			},
 			SecretProperties: &azcertificates.SecretProperties{
 				ContentType: &contentType,
@@ -178,13 +261,27 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 			X509CertificateProperties: &azcertificates.X509CertificateProperties{
 				Subject:  &subject,
 				KeyUsage: keyUsage,
-				SubjectAlternativeNames: &azcertificates.SubjectAlternativeNames{
-					DNSNames: []*string{
-						to.Ptr("locmai.dev"),
-						to.Ptr("www.locmai.dev")},
-				},
 			},
 		},
+	}
+
+	if len(plan.CertificatePolicy.X509CertificateProperties.SubjectAlternativeNames.DNSNames) > 0 {
+		azureCertParams.CertificatePolicy.X509CertificateProperties.SubjectAlternativeNames = &azcertificates.SubjectAlternativeNames{
+			DNSNames:           []*string{},
+			Emails:             []*string{},
+			UserPrincipalNames: []*string{},
+		}
+		for _, dnsName := range plan.CertificatePolicy.X509CertificateProperties.SubjectAlternativeNames.DNSNames {
+			azureCertParams.CertificatePolicy.X509CertificateProperties.SubjectAlternativeNames.DNSNames = append(azureCertParams.CertificatePolicy.X509CertificateProperties.SubjectAlternativeNames.DNSNames, &dnsName)
+		}
+
+		for _, email := range plan.CertificatePolicy.X509CertificateProperties.SubjectAlternativeNames.Emails {
+			azureCertParams.CertificatePolicy.X509CertificateProperties.SubjectAlternativeNames.Emails = append(azureCertParams.CertificatePolicy.X509CertificateProperties.SubjectAlternativeNames.Emails, &email)
+		}
+
+		for _, upn := range plan.CertificatePolicy.X509CertificateProperties.SubjectAlternativeNames.UPNs {
+			azureCertParams.CertificatePolicy.X509CertificateProperties.SubjectAlternativeNames.UserPrincipalNames = append(azureCertParams.CertificatePolicy.X509CertificateProperties.SubjectAlternativeNames.UserPrincipalNames, &upn)
+		}
 	}
 
 	certResp, err := certClient.CreateCertificate(ctx, plan.Name.ValueString(), azureCertParams, nil)
@@ -197,30 +294,9 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	csrPem := pem.Block{
-		Type:  "CERTIFICATE REQUEST",
-		Bytes: certResp.CSR,
-	}
-	tflog.Info(ctx, fmt.Sprintf("csr pem: %v", string(pem.EncodeToMemory(&csrPem))))
-
-	plan.CSRPEM = types.StringValue(string(pem.EncodeToMemory(&csrPem)))
-
 	csr, err := x509.ParseCertificateRequest(certResp.CSR)
 
-	caCert, err := certClient.GetCertificate(ctx, "root-ca", "", nil)
-	tflog.Info(ctx, "============================================================")
-	caCertPem := pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: caCert.CER,
-	}
-	csrDebugPem := pem.Block{
-		Type:  "CERTIFICATE REQUEST",
-		Bytes: csr.Raw,
-	}
-
-	tflog.Info(ctx, fmt.Sprintf("ca cert: %v", string(pem.EncodeToMemory(&caCertPem))))
-	tflog.Info(ctx, fmt.Sprintf("csr: %v", string(pem.EncodeToMemory(&csrDebugPem))))
-	tflog.Info(ctx, "============================================================")
+	caCert, err := certClient.GetCertificate(ctx, plan.CAName.ValueString(), "", nil)
 
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -248,19 +324,17 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	template := &x509.Certificate{
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		ExtraExtensions:       []pkix.Extension{csr.Extensions[sanIdx]},
-		IsCA:                  false,
-		NotAfter:              time.Now().Add(validityHours),
-		NotBefore:             time.Now(),
-		SerialNumber:          big.NewInt(time.Now().UnixMilli()),
-		Subject:               csr.Subject,
-		PublicKey:             csr.PublicKey,
-		DNSNames:              csr.DNSNames,
-		BasicConstraintsValid: true,
+		ExtKeyUsage:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		ExtraExtensions: []pkix.Extension{csr.Extensions[sanIdx]},
+		IsCA:            false,
+		NotAfter:        time.Now().Add(validityHours),
+		NotBefore:       time.Now(),
+		SerialNumber:    big.NewInt(time.Now().UnixMilli()),
+		Subject:         csr.Subject,
+		PublicKey:       csr.PublicKey,
 	}
 
-	signer, _ := NewAzureKVSigner(ctx, *r.azureCred, plan.VaultURL.ValueString(), "root-ca", azkeys.SignatureAlgorithmRS256, parsedCACert.PublicKey)
+	signer, _ := NewAzureKVSigner(ctx, *r.azureCred, plan.VaultURL.ValueString(), plan.CAName.ValueString(), azkeys.SignatureAlgorithmRS256, parsedCACert.PublicKey)
 
 	signedCert, err := x509.CreateCertificate(rand.Reader, template, parsedCACert, template.PublicKey, signer)
 
@@ -278,9 +352,6 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		X509Certificates: certs,
 	}
 
-	tflog.Info(ctx, fmt.Sprintf("cert params: %v", signedCert))
-	tflog.Info(ctx, fmt.Sprintf("cert params: %v", certParams.X509Certificates))
-
 	_, err = certClient.MergeCertificate(ctx, plan.Name.ValueString(), certParams, nil)
 
 	if err != nil {
@@ -290,7 +361,6 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		)
 		return
 	}
-	// _ = certResp
 
 	// Set state to fully populated data
 	diags = resp.State.Set(ctx, plan)
