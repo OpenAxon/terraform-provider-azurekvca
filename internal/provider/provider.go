@@ -97,6 +97,12 @@ func (p *azureKVCAProvider) Configure(ctx context.Context, req provider.Configur
 func (p *azureKVCAProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewCertificateResource,
+
+		// Deprecated resources
+		NewCreateResource,
+		NewRequestResource,
+		NewSignResource,
+		NewMergeResource,
 	}
 }
 

@@ -17,20 +17,29 @@ Create a new certificate version and if needed cert ready for signing
 
 ### Required
 
-- `key` (Attributes) Private key attributes (see [below for nested schema](#nestedatt--key))
-- `name` (String) Name of cert to create
-- `vault_url` (String) URL of Azure Key Vault
+- `ca_name` (String) Name of CA to use for signing
+- `certificate_policy` (Attributes) Certificate policy (see [below for nested schema](#nestedatt--certificate_policy))
+- `name` (String) Name of certificate to create
+- `vault_url` (String) URL of Azure Key Vault where the certificate will be created
 
 ### Optional
 
 - `trigger` (String) String value that when changed triggers a recreate. Good for triggering rotations
 
-### Read-Only
+<a id="nestedatt--certificate_policy"></a>
+### Nested Schema for `certificate_policy`
 
-- `csr_pem` (String) Resulting CSR in PEM format
+Required:
 
-<a id="nestedatt--key"></a>
-### Nested Schema for `key`
+- `key_properties` (Attributes) Private key attributes (see [below for nested schema](#nestedatt--certificate_policy--key_properties))
+- `x509_certificate_properties` (Attributes) X.509 certificate properties (see [below for nested schema](#nestedatt--certificate_policy--x509_certificate_properties))
+
+Optional:
+
+- `secret_properties` (Attributes) Secret properties (see [below for nested schema](#nestedatt--certificate_policy--secret_properties))
+
+<a id="nestedatt--certificate_policy--key_properties"></a>
+### Nested Schema for `certificate_policy.key_properties`
 
 Required:
 
@@ -40,5 +49,38 @@ Required:
 
 Optional:
 
-- `curve` (String) One of (P-256, P-384, P-521) Required if key type is EC or EC-HSM
+- `curve` (String) One of (P-256, P-384, P-521). Required if key type is EC or EC-HSM
 - `key_size` (Number) Size of key in bits. Required if key type is RSA or RSA-HSM
+
+
+<a id="nestedatt--certificate_policy--x509_certificate_properties"></a>
+### Nested Schema for `certificate_policy.x509_certificate_properties`
+
+Required:
+
+- `key_usage` (List of String) Key usage of the certificate
+- `subject` (String) Subject name of the certificate
+
+Optional:
+
+- `extended_key_usage` (List of String) Extended key usage of the certificate
+- `subject_alternative_names` (Attributes) Subject alternative names for the certificate (see [below for nested schema](#nestedatt--certificate_policy--x509_certificate_properties--subject_alternative_names))
+- `validity_in_months` (Number) Validity period of the certificate in months
+
+<a id="nestedatt--certificate_policy--x509_certificate_properties--subject_alternative_names"></a>
+### Nested Schema for `certificate_policy.x509_certificate_properties.subject_alternative_names`
+
+Optional:
+
+- `dns_names` (List of String) DNS names for the certificate
+- `emails` (List of String) Email addresses for the certificate
+- `upns` (List of String) User Principal Names for the certificate
+
+
+
+<a id="nestedatt--certificate_policy--secret_properties"></a>
+### Nested Schema for `certificate_policy.secret_properties`
+
+Optional:
+
+- `content_type` (String) Content type of the secret
