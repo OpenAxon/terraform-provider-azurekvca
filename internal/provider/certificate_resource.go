@@ -2,17 +2,27 @@ package provider
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"math/big"
+	"slices"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
+	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
@@ -113,6 +123,10 @@ func (r *certificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 	}
 }
 
+func toKeyUsageType(value azcertificates.KeyUsageType) *azcertificates.KeyUsageType {
+	return &value
+}
+
 // Create creates the resource and sets the initial Terraform state.
 func (r *certificateResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	// Retrieve values from plan
@@ -135,8 +149,18 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 	keySize := int32(plan.Key.KeySize.ValueInt64())
 	issuer := "Unknown"
 	contentType := "application/x-pem-file"
-	subject := "cn=" + plan.Name.ValueString()
-	certParams := azcertificates.CreateCertificateParameters{
+	subject := "CN=locmai.dev"
+
+	keyUsage := []*azcertificates.KeyUsageType{
+		toKeyUsageType(azcertificates.KeyUsageTypeKeyCertSign),
+		toKeyUsageType(azcertificates.KeyUsageTypeDigitalSignature),
+		toKeyUsageType(azcertificates.KeyUsageTypeKeyEncipherment),
+		toKeyUsageType(azcertificates.KeyUsageTypeDataEncipherment),
+		toKeyUsageType(azcertificates.KeyUsageTypeNonRepudiation),
+		toKeyUsageType(azcertificates.KeyUsageTypeKeyAgreement),
+	}
+
+	azureCertParams := azcertificates.CreateCertificateParameters{
 		CertificatePolicy: &azcertificates.CertificatePolicy{
 			IssuerParameters: &azcertificates.IssuerParameters{
 				Name: &issuer,
@@ -152,11 +176,19 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 				ContentType: &contentType,
 			},
 			X509CertificateProperties: &azcertificates.X509CertificateProperties{
-				Subject: &subject,
+				Subject:  &subject,
+				KeyUsage: keyUsage,
+				SubjectAlternativeNames: &azcertificates.SubjectAlternativeNames{
+					DNSNames: []*string{
+						to.Ptr("locmai.dev"),
+						to.Ptr("www.locmai.dev")},
+				},
 			},
 		},
 	}
-	certResp, err := certClient.CreateCertificate(ctx, plan.Name.ValueString(), certParams, nil)
+
+	certResp, err := certClient.CreateCertificate(ctx, plan.Name.ValueString(), azureCertParams, nil)
+
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating cert",
@@ -169,7 +201,96 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		Type:  "CERTIFICATE REQUEST",
 		Bytes: certResp.CSR,
 	}
+	tflog.Info(ctx, fmt.Sprintf("csr pem: %v", string(pem.EncodeToMemory(&csrPem))))
+
 	plan.CSRPEM = types.StringValue(string(pem.EncodeToMemory(&csrPem)))
+
+	csr, err := x509.ParseCertificateRequest(certResp.CSR)
+
+	caCert, err := certClient.GetCertificate(ctx, "root-ca", "", nil)
+	tflog.Info(ctx, "============================================================")
+	caCertPem := pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: caCert.CER,
+	}
+	csrDebugPem := pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: csr.Raw,
+	}
+
+	tflog.Info(ctx, fmt.Sprintf("ca cert: %v", string(pem.EncodeToMemory(&caCertPem))))
+	tflog.Info(ctx, fmt.Sprintf("csr: %v", string(pem.EncodeToMemory(&csrDebugPem))))
+	tflog.Info(ctx, "============================================================")
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error getting ca cert",
+			"Could not get ca cert, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	parsedCACert, err := x509.ParseCertificate(caCert.CER)
+	sanIdx := slices.IndexFunc(csr.Extensions, func(e pkix.Extension) bool { return e.Id.Equal(oidExtensionSubjectAltName) })
+	if sanIdx < 0 {
+		resp.Diagnostics.AddError(
+			"Error finding SAN extension in CSR",
+			"Could not find SAN extension in CSR",
+		)
+		return
+	}
+	validityHours, err := time.ParseDuration(fmt.Sprintf("%s", "240h"))
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error calculating validity duration",
+			"Could not calculate validity validation, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	template := &x509.Certificate{
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		ExtraExtensions:       []pkix.Extension{csr.Extensions[sanIdx]},
+		IsCA:                  false,
+		NotAfter:              time.Now().Add(validityHours),
+		NotBefore:             time.Now(),
+		SerialNumber:          big.NewInt(time.Now().UnixMilli()),
+		Subject:               csr.Subject,
+		PublicKey:             csr.PublicKey,
+		DNSNames:              csr.DNSNames,
+		BasicConstraintsValid: true,
+	}
+
+	signer, _ := NewAzureKVSigner(ctx, *r.azureCred, plan.VaultURL.ValueString(), "root-ca", azkeys.SignatureAlgorithmRS256, parsedCACert.PublicKey)
+
+	signedCert, err := x509.CreateCertificate(rand.Reader, template, parsedCACert, template.PublicKey, signer)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error signing cert",
+			"Could not sign cert, unexpected error: "+err.Error(),
+		)
+	}
+
+	certBase64 := base64.StdEncoding.EncodeToString(signedCert)
+	var certs = [][]byte{[]byte(certBase64)}
+
+	certParams := azcertificates.MergeCertificateParameters{
+		X509Certificates: certs,
+	}
+
+	tflog.Info(ctx, fmt.Sprintf("cert params: %v", signedCert))
+	tflog.Info(ctx, fmt.Sprintf("cert params: %v", certParams.X509Certificates))
+
+	_, err = certClient.MergeCertificate(ctx, plan.Name.ValueString(), certParams, nil)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error merging cert",
+			"Could not merge cert, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	// _ = certResp
 
 	// Set state to fully populated data
 	diags = resp.State.Set(ctx, plan)

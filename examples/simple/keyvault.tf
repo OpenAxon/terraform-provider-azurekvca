@@ -21,6 +21,18 @@ resource "azurerm_key_vault" "example" {
       "Sign",
       "Encrypt",
       "Decrypt",
+      "List",
+      "Create",
+      "Verify",
+      "Update",
+      "Import",
+      "Delete",
+      "Recover",
+      "Backup",
+      "Restore",
+      "GetRotationPolicy",
+      "SetRotationPolicy",
+      "Rotate",
     ]
 
     secret_permissions = [

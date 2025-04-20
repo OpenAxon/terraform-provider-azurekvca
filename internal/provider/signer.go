@@ -50,7 +50,7 @@ func (a *AzureKVSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOp
 
 	signResp, err := keyClient.Sign(a.ctx, a.keyName, "", params, nil)
 	if err != nil {
-		return nil, err
+		return signResp.Result, err
 	}
 
 	return signResp.Result, nil
