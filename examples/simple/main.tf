@@ -1,5 +1,5 @@
-resource "azurerm_key_vault_certificate" "example" {
-  name         = "locmai-dev-root-ca"
+resource "azurerm_key_vault_certificate" "azure_ca" {
+  name         = "root-ca"
   key_vault_id = azurerm_key_vault.example.id
 
   certificate_policy {
@@ -34,16 +34,16 @@ resource "azurerm_key_vault_certificate" "example" {
         "keyCertSign",
       ]
 
-      subject            = "CN=locmai.dev"
+      subject            = "CN=axon.io"
       validity_in_months = 120
     }
   }
 }
 
-resource "azurekvca_certificate" "example" {
+resource "azurekvca_certificate" "intermediate_certificate" {
   vault_url = azurerm_key_vault.example.vault_uri
-  name      = "locmai-intermediate-cert"
-  ca_name   = azurerm_key_vault_certificate.example.name
+  name      = "intermediate-certificate"
+  ca_name   = azurerm_key_vault_certificate.azure_ca.name
 
   certificate_policy = {
     key_properties = {
@@ -63,11 +63,11 @@ resource "azurekvca_certificate" "example" {
         "keyCertSign",
       ]
 
-      subject = "CN=locmai.dev"
+      subject = "CN=axon.io"
       subject_alternative_names = {
         dns_names = [
-          "locmai.dev",
-          "test.locmai.dev",
+          "axon.io",
+          "test.axon.io",
         ]
       }
       validity_in_months = 1

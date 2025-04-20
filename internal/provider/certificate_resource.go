@@ -315,7 +315,7 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		)
 		return
 	}
-	validityHours, err := time.ParseDuration(fmt.Sprintf("%s", "240h"))
+	validityDuration, err := time.ParseDuration(fmt.Sprintf("%d", plan.CertificatePolicy.X509CertificateProperties.ValidityInMonths.ValueInt64()*24*30) + "h")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error calculating validity duration",
@@ -327,7 +327,7 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		ExtKeyUsage:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		ExtraExtensions: []pkix.Extension{csr.Extensions[sanIdx]},
 		IsCA:            false,
-		NotAfter:        time.Now().Add(validityHours),
+		NotAfter:        time.Now().Add(validityDuration),
 		NotBefore:       time.Now(),
 		SerialNumber:    big.NewInt(time.Now().UnixMilli()),
 		Subject:         csr.Subject,
