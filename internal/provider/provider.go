@@ -12,7 +12,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 // Ensure azureKVCAProvider satisfies various provider interfaces.
@@ -27,11 +26,11 @@ type azureKVCAProvider struct {
 	version string
 }
 
-type azureKVCAProviderModel struct {
-	TenantID    types.String `tfsdka:"tenant_id"`
-	ClientID    types.String `tfsdka:"client_id"`
-	Environment types.String `tfsdka:"environment"`
-}
+// type azureKVCAProviderModel struct {
+// 	TenantID    types.String `tfsdka:"tenant_id"`
+// 	ClientID    types.String `tfsdka:"client_id"`
+// 	Environment types.String `tfsdka:"environment"`
+// }
 
 func (p *azureKVCAProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "azurekvca"
@@ -59,8 +58,8 @@ func (p *azureKVCAProvider) Schema(ctx context.Context, req provider.SchemaReque
 }
 
 func (p *azureKVCAProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	// _tenantID := os.Getenv("ARM_TENANT_ID")
-	// _clientID := os.Getenv("ARM_CLIENT_ID")
+	// tenantID := os.Getenv("ARM_TENANT_ID")
+	// clientID := os.Getenv("ARM_CLIENT_ID")
 	// environment := os.Getenv("ARM_ENVIRONMENT")
 	// var data azureKVCAProviderModel
 	//
@@ -77,7 +76,7 @@ func (p *azureKVCAProvider) Configure(ctx context.Context, req provider.Configur
 	// if data.Environment.ValueString() != "" {
 	// 	environment = data.Environment.ValueString()
 	// }
-
+	//
 	// azureCredentialOptions := azidentity.DefaultAzureCredentialOptions{
 	// 	TenantID: tenantID,
 	// }

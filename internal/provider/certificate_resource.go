@@ -235,8 +235,8 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 
 	keySize := int32(plan.CertificatePolicy.CertificateKeyProperties.KeySize.ValueInt64())
 	issuer := "Unknown"
-	contentType := string(plan.CertificatePolicy.SecretProperties.ContentType.ValueString())
-	subject := string(plan.CertificatePolicy.X509CertificateProperties.Subject.ValueString())
+	contentType := plan.CertificatePolicy.SecretProperties.ContentType.ValueString()
+	subject := plan.CertificatePolicy.X509CertificateProperties.Subject.ValueString()
 
 	keyUsage := []*azcertificates.KeyUsageType{}
 	for _, usage := range plan.CertificatePolicy.X509CertificateProperties.KeyUsage {
@@ -296,6 +296,14 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 
 	csr, err := x509.ParseCertificateRequest(certResp.CSR)
 
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error parsing CSR from certificate response",
+			"Could not parse CSR, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
 	caCert, err := certClient.GetCertificate(ctx, plan.CAName.ValueString(), "", nil)
 
 	if err != nil {
@@ -307,6 +315,13 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	parsedCACert, err := x509.ParseCertificate(caCert.CER)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error parsing CA cert",
+			"Could not parse CA cert, unexpected error: "+err.Error(),
+		)
+	}
+
 	sanIdx := slices.IndexFunc(csr.Extensions, func(e pkix.Extension) bool { return e.Id.Equal(oidExtensionSubjectAltName) })
 	if sanIdx < 0 {
 		resp.Diagnostics.AddError(
