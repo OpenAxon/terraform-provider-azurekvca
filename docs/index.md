@@ -18,5 +18,4 @@ Terraform Provider for using Azure Key Vault as a CA
 ### Optional
 
 - `client_id` (String) The Azure client ID.
-- `environment` (String) The Cloud Environment which should be used. Possible values are public, usgovernment, german, and china. Defaults to public. This can also be sourced from the ARM_ENVIRONMENT Environment Variable. Not used when metadata_host is specified.
 - `tenant_id` (String) The Azure tenant ID.
