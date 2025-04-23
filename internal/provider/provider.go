@@ -26,12 +26,6 @@ type azureKVCAProvider struct {
 	version string
 }
 
-// type azureKVCAProviderModel struct {
-// 	TenantID    types.String `tfsdka:"tenant_id"`
-// 	ClientID    types.String `tfsdka:"client_id"`
-// 	Environment types.String `tfsdka:"environment"`
-// }
-
 func (p *azureKVCAProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "azurekvca"
 	resp.Version = p.version
@@ -49,39 +43,13 @@ func (p *azureKVCAProvider) Schema(ctx context.Context, req provider.SchemaReque
 				Description: "The Azure client ID.",
 				Optional:    true,
 			},
-			"environment": schema.StringAttribute{
-				Description: "The Cloud Environment which should be used. Possible values are public, usgovernment, german, and china. Defaults to public. This can also be sourced from the ARM_ENVIRONMENT Environment Variable. Not used when metadata_host is specified.",
-				Optional:    true,
-			},
 		},
 	}
 }
 
 func (p *azureKVCAProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	// tenantID := os.Getenv("ARM_TENANT_ID")
-	// clientID := os.Getenv("ARM_CLIENT_ID")
-	// environment := os.Getenv("ARM_ENVIRONMENT")
-	// var data azureKVCAProviderModel
-	//
-	// resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-	//
-	// if data.TenantID.ValueString() != "" {
-	// 	clientID = data.TenantID.ValueString()
-	// }
-	//
-	// if data.ClientID.ValueString() != "" {
-	// 	clientID = data.ClientID.ValueString()
-	// }
-	//
-	// if data.Environment.ValueString() != "" {
-	// 	environment = data.Environment.ValueString()
-	// }
-	//
-	// azureCredentialOptions := azidentity.DefaultAzureCredentialOptions{
-	// 	TenantID: tenantID,
-	// }
-
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
+
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error authenticating to Azure",
