@@ -13,6 +13,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
+	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -182,7 +183,7 @@ func (r *signResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	signer, err := NewAzureKVSigner(ctx, *r.azureCred, plan.VaultURL.ValueString(), plan.CAName.ValueString(), plan.SignatureAlgorithm.ValueString(), parsedCACert.PublicKey)
+	signer, err := NewAzureKVSigner(ctx, *r.azureCred, plan.VaultURL.ValueString(), plan.CAName.ValueString(), azkeys.SignatureAlgorithm(plan.SignatureAlgorithm.ValueString()), parsedCACert.PublicKey)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating signer",

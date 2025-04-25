@@ -9,18 +9,18 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
 )
 
-func NewAzureKVSigner(ctx context.Context, cred azcore.TokenCredential, vaultURL string, keyName string, signatureAlgorithm string, publicKey crypto.PublicKey) (a *azureKVSigner, err error) {
-	return &azureKVSigner{
+func NewAzureKVSigner(ctx context.Context, cred azcore.TokenCredential, vaultURL string, keyName string, signatureAlgorithm azkeys.SignatureAlgorithm, publicKey crypto.PublicKey) (a *AzureKVSigner, err error) {
+	return &AzureKVSigner{
 		cred:               cred,
 		ctx:                ctx,
 		keyName:            keyName,
 		publicKey:          publicKey,
-		signatureAlgorithm: azkeys.SignatureAlgorithm(signatureAlgorithm),
+		signatureAlgorithm: signatureAlgorithm,
 		vaultURL:           vaultURL,
 	}, nil
 }
 
-type azureKVSigner struct {
+type AzureKVSigner struct {
 	cred               azcore.TokenCredential
 	ctx                context.Context
 	keyName            string
@@ -29,11 +29,11 @@ type azureKVSigner struct {
 	vaultURL           string
 }
 
-func (a *azureKVSigner) Public() crypto.PublicKey {
+func (a *AzureKVSigner) Public() crypto.PublicKey {
 	return a.publicKey
 }
 
-func (a *azureKVSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
+func (a *AzureKVSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
 	if a.keyName == "" {
 		return make([]byte, 0), nil
 	}
@@ -50,7 +50,7 @@ func (a *azureKVSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOp
 
 	signResp, err := keyClient.Sign(a.ctx, a.keyName, "", params, nil)
 	if err != nil {
-		return nil, err
+		return signResp.Result, err
 	}
 
 	return signResp.Result, nil

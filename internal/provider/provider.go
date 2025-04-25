@@ -32,12 +32,24 @@ func (p *azureKVCAProvider) Metadata(ctx context.Context, req provider.MetadataR
 }
 
 func (p *azureKVCAProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
-	resp.Schema = schema.Schema{}
+	resp.Schema = schema.Schema{
+		MarkdownDescription: "Terraform Provider for using Azure Key Vault as a CA",
+		Attributes: map[string]schema.Attribute{
+			"tenant_id": schema.StringAttribute{
+				Description: "The Azure tenant ID.",
+				Optional:    true,
+			},
+			"client_id": schema.StringAttribute{
+				Description: "The Azure client ID.",
+				Optional:    true,
+			},
+		},
+	}
 }
 
 func (p *azureKVCAProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	// TODO make this configurable via the provider config (Can I do something stupid like consume the azure provider?)
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
+
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error authenticating to Azure",
@@ -51,10 +63,13 @@ func (p *azureKVCAProvider) Configure(ctx context.Context, req provider.Configur
 
 func (p *azureKVCAProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		NewCertificateResource,
+
+		// Deprecated resources
 		NewCreateResource,
-		NewMergeResource,
 		NewRequestResource,
 		NewSignResource,
+		NewMergeResource,
 	}
 }
 

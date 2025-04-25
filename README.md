@@ -1,6 +1,6 @@
-# Terraform Provider for using Azure KeyVault as a CA
+# Terraform Provider for using Azure Key Vault as a CA
 
-Traditionally using Azure KeyVault(KV) as a CA requires exporting the CA private key into terraform where it gets saved into state.
+Traditionally using Azure Key Vault(KV) as a CA requires exporting the CA private key into terraform where it gets saved into state.
 
 KV has support for a sign operation on stored keys regardless of their exportability. With a little work this sign operation can be used to generate certificates.
 
@@ -19,8 +19,7 @@ terraform {
 
 provider "azurekvca" {}
 
-# Generate a new cert version (and cert if needed)
-resource "azurekvca_create" "test" {
+resource "azurekvca_certificate" "example" {
   vault_url = "https://something.vault.azure.net/"
   name      = "test-cert"
 
@@ -35,8 +34,8 @@ resource "azurekvca_create" "test" {
 }
 
 # Optionally mangle the CSR to add values not supported by Azure (URI SAN for example)
-resource "azurekvca_request" "test" {
-  csr_pem_in = azurekvca_create.test.csr_pem
+resource "azurekvca_signing_request" "example" {
+  csr_pem_in = azurekvca_certificate.example.csr_pem
 
   names = {
     email = [
@@ -54,22 +53,19 @@ resource "azurekvca_request" "test" {
   }
 }
 
-# Sign CSR with CA cert in Key Vault. This does not check the CSR signature just blindly pulls the public key, subject and SAN from the request
-resource "azurekvca_sign" "test" {
-  vault_url           = "https://something.vault.azure.net/"
-  ca_name             = "test-ca"
+resource "azurekvca_signed_certificate" "example" {
+  vault_url           = azurekvca_certificate.example.vault_url
+  ca_name             = azurekvca_certificate.example.name
   validity_days       = 30
   signature_algorithm = "RS256"
-  csr_pem             = azurekvca_request.test.csr_pem_out
+  csr_pem             = azurekvca_signing_request.example.csr_pem_out
 }
 
-# Merge the signed cert back into the original request
-resource "azurekvca_merge" "test" {
-  vault_url = azurekvca_create.test.vault_url
-  name      = azurekvca_create.test.name
-  cert_pem  = azurekvca_sign.test.signed_cert_pem
+resource "azurekvca_merged_certificate" "example" {
+  vault_url = azurekvca_certificate.example.vault_url
+  name      = azurekvca_certificate.example.name
+  cert_pem  = azurekvca_signed_certificate.example.signed_cert_pem
 }
-
 ```
 
 # TODO
