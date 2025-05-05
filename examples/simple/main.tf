@@ -32,6 +32,7 @@ resource "azurerm_key_vault_certificate" "azure_ca" {
       key_usage = [
         "digitalSignature",
         "keyCertSign",
+        "cRLSign",
       ]
 
       subject            = "CN=axon.io"

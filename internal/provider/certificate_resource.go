@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/base64"
 	"fmt"
 	"math/big"
@@ -339,14 +340,16 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	template := &x509.Certificate{
-		ExtKeyUsage:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		ExtraExtensions: []pkix.Extension{csr.Extensions[sanIdx]},
-		IsCA:            false,
-		NotAfter:        time.Now().Add(validityDuration),
-		NotBefore:       time.Now(),
-		SerialNumber:    big.NewInt(time.Now().UnixMilli()),
-		Subject:         csr.Subject,
-		PublicKey:       csr.PublicKey,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		KeyUsage:              x509.KeyUsageCRLSign | x509.KeyUsageCertSign,
+		ExtraExtensions:       []pkix.Extension{csr.Extensions[sanIdx], {Id: asn1.ObjectIdentifier{2, 5, 29, 19}, Critical: true, Value: []byte{0x30, 0x03, 0x01, 0x01, 0xFF}}},
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		NotAfter:              time.Now().Add(validityDuration),
+		NotBefore:             time.Now(),
+		SerialNumber:          big.NewInt(time.Now().UnixMilli()),
+		Subject:               csr.Subject,
+		PublicKey:             csr.PublicKey,
 	}
 
 	signer, _ := NewAzureKVSigner(ctx, *r.azureCred, plan.VaultURL.ValueString(), plan.CAName.ValueString(), azkeys.SignatureAlgorithmRS256, parsedCACert.PublicKey)
