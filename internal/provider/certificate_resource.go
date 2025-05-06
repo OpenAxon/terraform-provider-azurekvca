@@ -349,6 +349,7 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		NotBefore:             time.Now(),
 		SerialNumber:          big.NewInt(time.Now().UnixMilli()),
 		Subject:               csr.Subject,
+		Issuer:                csr.Subject,
 		PublicKey:             csr.PublicKey,
 	}
 
