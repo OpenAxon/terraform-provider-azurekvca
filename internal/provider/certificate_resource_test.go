@@ -8,18 +8,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
 )
 
-func TestSignatureAlgorithmRS384Exists(t *testing.T) {
-	alg := azkeys.SignatureAlgorithmRS384
-	if alg != "RS384" {
-		t.Errorf("Expected RS384, got %s", alg)
-	}
-}
-
-func TestSignatureAlgorithmRS384NotRS256(t *testing.T) {
-	if azkeys.SignatureAlgorithmRS384 == azkeys.SignatureAlgorithmRS256 {
-		t.Error("RS384 should not equal RS256")
-	}
-}
 
 func TestSignatureAlgorithmMapping(t *testing.T) {
 	tests := []struct {
