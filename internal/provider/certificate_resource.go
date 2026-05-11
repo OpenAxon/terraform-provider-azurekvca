@@ -353,7 +353,7 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		PublicKey:             csr.PublicKey,
 	}
 
-	signer, _ := NewAzureKVSigner(ctx, *r.azureCred, plan.VaultURL.ValueString(), plan.CAName.ValueString(), azkeys.SignatureAlgorithmRS256, parsedCACert.PublicKey)
+	signer, _ := NewAzureKVSigner(ctx, *r.azureCred, plan.VaultURL.ValueString(), plan.CAName.ValueString(), azkeys.SignatureAlgorithmRS384, parsedCACert.PublicKey)
 
 	signedCert, err := x509.CreateCertificate(rand.Reader, template, parsedCACert, template.PublicKey, signer)
 
