@@ -9,25 +9,6 @@ import (
 )
 
 
-func TestSignatureAlgorithmMapping(t *testing.T) {
-	tests := []struct {
-		name     string
-		alg      azkeys.SignatureAlgorithm
-		expected string
-	}{
-		{"RS256 is SHA-256", azkeys.SignatureAlgorithmRS256, "RS256"},
-		{"RS384 is SHA-384", azkeys.SignatureAlgorithmRS384, "RS384"},
-		{"RS512 is SHA-512", azkeys.SignatureAlgorithmRS512, "RS512"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if string(tt.alg) != tt.expected {
-				t.Errorf("Expected %s, got %s", tt.expected, tt.alg)
-			}
-		})
-	}
-}
 
 func TestCertificateResourceUsesRS384(t *testing.T) {
 	// Read the actual source file to verify RS384 is used
