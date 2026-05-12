@@ -25,6 +25,20 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+// mapX509ToAzureSignatureAlgorithm maps an x509 signature algorithm to the
+// corresponding Azure Key Vault signature algorithm. This ensures intermediate
+// CAs use the same signature algorithm as their issuing CA.
+func mapX509ToAzureSignatureAlgorithm(alg x509.SignatureAlgorithm) azkeys.SignatureAlgorithm {
+	switch alg {
+	case x509.SHA384WithRSA:
+		return azkeys.SignatureAlgorithmRS384
+	case x509.SHA512WithRSA:
+		return azkeys.SignatureAlgorithmRS512
+	default:
+		return azkeys.SignatureAlgorithmRS256
+	}
+}
+
 // Ensure the implementation satisfies the expected interfaces.
 var (
 	_ resource.Resource              = &certificateResource{}
@@ -353,7 +367,7 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		PublicKey:             csr.PublicKey,
 	}
 
-	signer, _ := NewAzureKVSigner(ctx, *r.azureCred, plan.VaultURL.ValueString(), plan.CAName.ValueString(), azkeys.SignatureAlgorithmRS256, parsedCACert.PublicKey)
+	signer, _ := NewAzureKVSigner(ctx, *r.azureCred, plan.VaultURL.ValueString(), plan.CAName.ValueString(), mapX509ToAzureSignatureAlgorithm(parsedCACert.SignatureAlgorithm), parsedCACert.PublicKey)
 
 	signedCert, err := x509.CreateCertificate(rand.Reader, template, parsedCACert, template.PublicKey, signer)
 
