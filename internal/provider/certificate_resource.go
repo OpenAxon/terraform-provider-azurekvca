@@ -354,6 +354,7 @@ func (r *certificateResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 	template := &x509.Certificate{
+		SignatureAlgorithm:    parsedCACert.SignatureAlgorithm,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:              x509.KeyUsageCRLSign | x509.KeyUsageCertSign,
 		ExtraExtensions:       []pkix.Extension{csr.Extensions[sanIdx], {Id: asn1.ObjectIdentifier{2, 5, 29, 19}, Critical: true, Value: []byte{0x30, 0x03, 0x01, 0x01, 0xFF}}},
