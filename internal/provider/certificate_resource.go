@@ -39,6 +39,29 @@ func mapX509ToAzureSignatureAlgorithm(alg x509.SignatureAlgorithm) azkeys.Signat
 	}
 }
 
+// mapAzureToX509SignatureAlgorithm maps an Azure Key Vault signature algorithm
+// to the corresponding x509 signature algorithm. This is required so Go's
+// x509.CreateCertificate hashes the TBSCertificate with the matching digest
+// size that Azure Key Vault expects for the chosen signing algorithm.
+func mapAzureToX509SignatureAlgorithm(alg azkeys.SignatureAlgorithm) x509.SignatureAlgorithm {
+	switch alg {
+	case azkeys.SignatureAlgorithmRS256:
+		return x509.SHA256WithRSA
+	case azkeys.SignatureAlgorithmRS384:
+		return x509.SHA384WithRSA
+	case azkeys.SignatureAlgorithmRS512:
+		return x509.SHA512WithRSA
+	case azkeys.SignatureAlgorithmES256:
+		return x509.ECDSAWithSHA256
+	case azkeys.SignatureAlgorithmES384:
+		return x509.ECDSAWithSHA384
+	case azkeys.SignatureAlgorithmES512:
+		return x509.ECDSAWithSHA512
+	default:
+		return x509.UnknownSignatureAlgorithm
+	}
+}
+
 // Ensure the implementation satisfies the expected interfaces.
 var (
 	_ resource.Resource              = &certificateResource{}
