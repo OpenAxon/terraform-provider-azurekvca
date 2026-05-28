@@ -147,13 +147,14 @@ func (r *signResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 	template := &x509.Certificate{
-		ExtKeyUsage:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		ExtraExtensions: []pkix.Extension{csr.Extensions[sanIdx]},
-		IsCA:            false,
-		NotAfter:        time.Now().Add(validityHours),
-		NotBefore:       time.Now(),
-		SerialNumber:    big.NewInt(time.Now().UnixMilli()),
-		Subject:         csr.Subject,
+		SignatureAlgorithm: mapAzureToX509SignatureAlgorithm(azkeys.SignatureAlgorithm(plan.SignatureAlgorithm.ValueString())),
+		ExtKeyUsage:        []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		ExtraExtensions:    []pkix.Extension{csr.Extensions[sanIdx]},
+		IsCA:               false,
+		NotAfter:           time.Now().Add(validityHours),
+		NotBefore:          time.Now(),
+		SerialNumber:       big.NewInt(time.Now().UnixMilli()),
+		Subject:            csr.Subject,
 	}
 
 	certClient, err := azcertificates.NewClient(plan.VaultURL.ValueString(), *r.azureCred, nil)
