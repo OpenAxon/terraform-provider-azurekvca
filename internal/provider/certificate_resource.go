@@ -34,6 +34,12 @@ func mapX509ToAzureSignatureAlgorithm(alg x509.SignatureAlgorithm) azkeys.Signat
 		return azkeys.SignatureAlgorithmRS384
 	case x509.SHA512WithRSA:
 		return azkeys.SignatureAlgorithmRS512
+	case x509.ECDSAWithSHA256:
+		return azkeys.SignatureAlgorithmES256
+	case x509.ECDSAWithSHA384:
+		return azkeys.SignatureAlgorithmES384
+	case x509.ECDSAWithSHA512:
+		return azkeys.SignatureAlgorithmES512
 	default:
 		return azkeys.SignatureAlgorithmRS256
 	}
